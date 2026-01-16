@@ -1,0 +1,101 @@
+import os
+import json
+from google import genai
+from dotenv import load_dotenv
+
+load_dotenv()
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+MODEL_NAME = "gemini-2.5-flash-lite"
+
+LOCATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "incident_types": {
+            "type": "array",
+            "items": {"type": "string"}
+        },
+        "location_candidates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "city": {"type": "string"},
+                    "country": {"type": "string"},
+
+                    "place_type": {
+                        "type": "string",
+                        "enum": [
+                            "barrio",
+                            "parroquia",
+                            "calle",
+                            "avenida",
+                            "punto_de_referencia",
+                            "zona_general"
+                        ]
+                    },
+
+                    "precision": {
+                        "type": "string",
+                        "enum": [
+                            "alta",
+                            "media",
+                            "baja"
+                        ]
+                    },
+
+                    "reasoning": {"type": "string"}
+                },
+                "required": [
+                    "name",
+                    "city",
+                    "country",
+                    "place_type",
+                    "precision",
+                    "reasoning"
+                ]
+            }
+        }
+    },
+    "required": ["incident_types", "location_candidates"]
+}
+
+
+LOCATION_PROMPT = """
+Analiza la siguiente noticia de inseguridad ciudadana.
+
+Extrae los tipos de incidentes y los lugares mencionados.
+
+REGLAS IMPORTANTES:
+- Si el texto menciona "sector", "barrio" o "zona", clasifica el lugar como BARRIO.
+- Si menciona "parroquia", clasifícalo como PARROQUIA.
+- Si menciona "calle", "avenida" o "av.", clasifícalo como CALLE o AVENIDA.
+- No confundas barrios con calles.
+- Barrios históricos de Quito como La Marín, San Roque, La Tola
+  deben clasificarse como BARRIO.
+
+No inventes coordenadas.
+No hagas suposiciones fuera del texto.
+Responde exclusivamente con JSON válido.
+"""
+
+
+def infer_location(text: str) -> dict:
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=LOCATION_PROMPT + "\n\n" + text,
+        config={
+            "response_mime_type": "application/json",
+            "response_schema": LOCATION_SCHEMA,
+            "temperature": 0.2
+        }
+    )
+
+    try:
+        return json.loads(response.text)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"Gemini devolvió una respuesta inválida:\n{response.text}"
+        ) from e
