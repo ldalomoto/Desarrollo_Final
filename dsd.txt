@@ -99,3 +99,79 @@ def infer_location(text: str) -> dict:
         raise ValueError(
             f"Gemini devolvió una respuesta inválida:\n{response.text}"
         ) from e
+
+
+
+
+
+#######################################################################################
+
+
+
+
+import json
+import re
+from core.llm import run_llm
+
+LOCATION_PROMPT = """
+Analiza cuidadosamente la siguiente noticia de inseguridad ciudadana.
+
+OBJETIVO:
+Extraer los tipos de incidentes y determinar la ubicación MÁS ESPECÍFICA posible.
+
+Devuelve SOLO JSON válido con esta estructura:
+
+{
+  "incident_types": ["string"],
+  "location_candidates": [
+    {
+      "name": "string",
+      "city": "string",
+      "country": "Ecuador",
+      "place_type": "barrio | parroquia | calle | avenida | punto_de_referencia | zona_general",
+      "precision": "alta | media | baja",
+      "reasoning": "string"
+    }
+  ]
+}
+"""
+
+def clean_json(text: str) -> str:
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start == -1 or end == -1:
+        raise ValueError("No se encontró JSON en la respuesta del modelo")
+
+    text = text[start:end + 1]
+
+    text = text.replace("\\_", "_")
+    text = text.replace("\\-", "-")
+    text = text.replace("\\'", "'")
+
+    text = re.sub(r"[\x00-\x1F\x7F]", "", text)
+
+    return text
+
+def infer_location(text: str) -> dict:
+    prompt = LOCATION_PROMPT + "\n\nNOTICIA:\n" + text
+
+    response = run_llm(prompt, max_tokens=700)
+
+    with open("llm_raw_response.txt", "w", encoding="utf-8") as f:
+        f.write(response)
+
+    cleaned = clean_json(response)
+
+    try:
+        data = json.loads(cleaned)
+
+        if "location_candidates" not in data:
+            raise ValueError("Respuesta sin location_candidates")
+
+        return data
+
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"JSON inválido devuelto por el modelo:\n{cleaned}"
+        ) from e

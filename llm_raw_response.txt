@@ -1,0 +1,13 @@
+ {
+  "incident_types": ["violent crime", "drug gang activity"],
+  "location_candidates": [
+    {
+      "name": "Puerto López",
+      "city": "Puerto López",
+      "country": "Ecuador",
+      "place_type": "beach",
+      "precision": "alta",
+      "reasoning": "The discovery of human heads hanging from ropes on a beach in Puerto López indicates that this is the location where the incident occurred."
+    }
+  ]
+}

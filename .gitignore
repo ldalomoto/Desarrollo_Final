@@ -17,3 +17,6 @@ build/
 coverage/
 *.pyc
 __pycache__/
+accounts.db
+config_twscrape.py
+x.py

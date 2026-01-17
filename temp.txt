@@ -1,0 +1,32 @@
+{
+  "incident_types": [
+    "asalto",
+    "robo"
+  ],
+  "location_candidates": [
+    {
+      "name": "San José de Morán",
+      "city": "Quito",
+      "country": "Ecuador",
+      "place_type": "barrio",
+      "precision": "alta",
+      "reasoning": "El texto menciona explícitamente el barrio San José de Morán como el lugar donde ocurrieron los hechos y donde la comunidad está alarmada por la cantidad de robos y asaltos."
+    },
+    {
+      "name": "Calderón",
+      "city": "Quito",
+      "country": "Ecuador",
+      "place_type": "barrio",
+      "precision": "media",
+      "reasoning": "Se menciona el sector de Calderón como una ubicación general en el norte de Quito, pero el incidente específico se sitúa en el barrio San José de Morán."
+    },
+    {
+      "name": "Quito",
+      "city": "Quito",
+      "country": "Ecuador",
+      "place_type": "zona_general",
+      "precision": "baja",
+      "reasoning": "Quito es la ciudad donde ocurrieron los incidentes, pero se proporcionan ubicaciones más específicas."
+    }
+  ]
+}

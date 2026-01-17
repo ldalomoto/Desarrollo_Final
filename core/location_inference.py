@@ -1,90 +1,149 @@
+import os
 import json
-from gpt4all import GPT4All
+from google import genai
+from dotenv import load_dotenv
+import re
 
-MODEL_NAME = "mistral-7b-instruct-v0.1.Q4_0.gguf"
+load_dotenv()
 
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-model = GPT4All(MODEL_NAME)
+MODEL_NAME = "gemini-2.5-flash-lite"
+
+LOCATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "incident_types": {
+            "type": "array",
+            "items": {"type": "string"}
+        },
+        "location_candidates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "city": {"type": "string"},
+                    "country": {"type": "string"},
+
+                    "place_type": {
+                        "type": "string",
+                        "enum": [
+                            "barrio",
+                            "parroquia",
+                            "calle",
+                            "avenida",
+                            "punto_de_referencia",
+                            "zona_general"
+                        ]
+                    },
+
+                    "precision": {
+                        "type": "string",
+                        "enum": ["alta", "media", "baja"]
+                    },
+
+                    "reasoning": {"type": "string"}
+                },
+                "required": [
+                    "name",
+                    "city",
+                    "country",
+                    "place_type",
+                    "precision",
+                    "reasoning"
+                ]
+            }
+        }
+    },
+    "required": ["incident_types", "location_candidates"]
+}
+
 
 LOCATION_PROMPT = """
 Analiza cuidadosamente la siguiente noticia de inseguridad ciudadana.
 
-Lee TODO el texto antes de responder.
+LEE TODO EL TEXTO ANTES DE RESPONDER.
 
 OBJETIVO:
-Extraer los tipos de incidentes y determinar la ubicación MÁS ESPECÍFICA posible donde ocurrió el hecho.
+1. Identificar los tipos de incidentes ocurridos.
+2. Detectar TODAS las ubicaciones mencionadas.
+3. Determinar cuál es la ubicación MÁS ESPECÍFICA posible donde ocurrió el hecho.
 
 PROCESO OBLIGATORIO:
-1. Identifica TODAS las referencias geográficas mencionadas en el texto.
-2. Clasifica cada referencia por nivel espacial:
-   - Macro: ciudad, parroquia, sector grande
-   - Meso: barrios, zonas urbanas
-   - Micro: calles, avenidas, intersecciones, puntos de referencia
-3. Si existe una ubicación MÁS ESPECÍFICA que otra (por ejemplo un barrio dentro de un sector),
-   DEBES priorizar la más específica.
-4. Usa ubicaciones generales SOLO como contexto, no como ubicación final si existe una más precisa.
-5. Si se menciona un barrio dentro de un sector o parroquia, el barrio tiene mayor prioridad.
-6. NO te quedes con la primera ubicación mencionada; analiza todo el texto.
+- Identifica todas las referencias geográficas del texto.
+- Clasifica cada una por nivel espacial:
+  * Macro: ciudad, cantón, parroquia
+  * Meso: barrio, sector, zona urbana
+  * Micro: calles, avenidas, intersecciones, puntos de referencia
+- Si existe una ubicación más específica dentro de otra (ej. barrio dentro de sector),
+  DEBES priorizar la más específica.
+- NO te quedes con la primera ubicación mencionada.
+- Usa ubicaciones generales solo como contexto si existe una más precisa.
 
 REGLAS DE CLASIFICACIÓN:
-- "sector", "barrio", "zona" → barrio (a menos que el texto indique parroquia)
-- "parroquia" → parroquia
-- "calle", "avenida", "av." → calle o avenida
-- Barrios históricos de Quito como La Marín, San Roque, La Tola, San José de Morán
-  deben clasificarse como barrio.
-- NO confundas parroquias con barrios.
-- NO inventes ubicaciones que no estén en el texto.
+- "sector", "barrio", "zona" → BARRIO
+- "parroquia" → PARROQUIA
+- "calle", "avenida", "av." → CALLE o AVENIDA
+- Barrios históricos de Quito (La Marín, San Roque, La Tola, San José de Morán)
+  deben clasificarse como BARRIO.
+- NO confundas barrios con parroquias.
+- NO inventes ubicaciones.
 
 PRECISIÓN:
-- "alta": barrio o punto específico claramente identificado
-- "media": sector o parroquia sin barrio específico
-- "baja": solo ciudad o referencia vaga
+- alta → calle, punto de referencia o barrio claramente identificado
+- media → parroquia o sector sin barrio
+- baja → solo ciudad o referencia vaga
 
-Devuelve EXCLUSIVAMENTE JSON válido con la siguiente estructura:
+IMPORTANTE:
+- Devuelve TODAS las ubicaciones relevantes, pero
+  la MÁS ESPECÍFICA debe aparecer PRIMERO en la lista.
+- País: Ecuador.
 
-{
-  "incident_types": ["string"],
-  "location_candidates": [
-    {
-      "name": "string",
-      "city": "Quito",
-      "country": "Ecuador",
-      "place_type": "barrio | parroquia | calle | avenida | punto_de_referencia | zona_general",
-      "precision": "alta | media | baja",
-      "reasoning": "Explica por qué esta ubicación fue priorizada sobre otras"
-    }
-  ]
-}
-
-NO agregues texto fuera del JSON.
-
+Responde EXCLUSIVAMENTE con JSON válido que cumpla el schema.
 """
-def clean_json(text: str) -> str:
-    # Elimina escapes inválidos como \_
-    text = text.replace("\\_", "_")
 
-    # Recorta todo antes del primer {
+
+def clean_json(text: str) -> str:
     start = text.find("{")
-    if start != -1:
-        text = text[start:]
+    end = text.rfind("}")
+
+    if start == -1 or end == -1:
+        raise ValueError("No se encontró JSON en la respuesta del modelo")
+
+    text = text[start:end + 1]
+
+    text = text.replace("\\_", "_")
+    text = text.replace("\\-", "-")
+    text = text.replace("\\'", "'")
+
+    text = re.sub(r"[\x00-\x1F\x7F]", "", text)
 
     return text
 
 
 def infer_location(text: str) -> dict:
-    prompt = LOCATION_PROMPT + "\n\nNOTICIA:\n" + text
+    response = client.models.generate_content(
+        model=MODEL_NAME,
+        contents=LOCATION_PROMPT + "\n\nNOTICIA:\n" + text,
+        config={
+            "response_mime_type": "application/json",
+            "response_schema": LOCATION_SCHEMA,
+            "temperature": 0.2
+        }
+    )
 
-    with model.chat_session():
-        response = model.generate(
-            prompt=prompt,
-            max_tokens=700,
-            temp=0.2
-        )
+    raw_text = response.text
+
+    with open("gemini_response.txt", "w", encoding="utf-8") as f:
+        f.write(raw_text)
 
     try:
-        cleaned = clean_json(response)
+        cleaned = clean_json(raw_text)
         return json.loads(cleaned)
+
     except json.JSONDecodeError as e:
         raise ValueError(
-            f"GPT4All devolvió JSON inválido:\n{response}"
+            f"Gemini devolvió JSON inválido:\n{raw_text}"
         ) from e
+

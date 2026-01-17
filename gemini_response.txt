@@ -1,0 +1,24 @@
+{
+  "incident_types": [
+    "ataque armado",
+    "ataque con arma de fuego"
+  ],
+  "location_candidates": [
+    {
+      "name": "Mall del Norte",
+      "city": "Guayaquil",
+      "country": "Ecuador",
+      "place_type": "punto_de_referencia",
+      "precision": "alta",
+      "reasoning": "El incidente ocurrió en los exteriores de este centro comercial, lo que lo convierte en la ubicación más específica y detallada mencionada."
+    },
+    {
+      "name": "Guayaquil",
+      "city": "Guayaquil",
+      "country": "Ecuador",
+      "place_type": "zona_general",
+      "precision": "baja",
+      "reasoning": "Se menciona la ciudad de Guayaquil como el lugar general donde ocurrieron los hechos, pero es menos específica que el centro comercial."
+    }
+  ]
+}

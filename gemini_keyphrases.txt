@@ -1,0 +1,8 @@
+{
+  "search_phrases": [
+    "Asesinato múltiple en el centro de Guayaquil",
+    "Tiroteo en calles Brasil y Los Ríos Guayaquil",
+    "Hallazgo de tres cuerpos en el centro sur de Guayaquil",
+    "Conflicto entre grupos delictivos en Guayaquil"
+  ]
+}
